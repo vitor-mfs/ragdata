@@ -1,0 +1,48 @@
+name: Kaya
+job: Cavaleiro Rúnico
+base_level: 175
+job_level: 60
+goal: mvp
+stats:
+  str: 120
+  agi: 90
+  vit: 80
+  int: 40
+  dex: 90
+  luk: 30
+equipment:
+  - slot: right_hand
+    name: Espada Rúnica
+    weapon_type: 2hSword
+    weapon_level: 4
+    base_atk: 220
+    refine: 10
+    slots: 2
+    cards:
+      - name: Carta Hydra
+        note: "+20% de dano em Demi-Humano"
+  - slot: armor
+    name: Armadura de Placas
+    base_def: 85
+    refine: 7
+  - slot: head_top
+    name: Elmo Reforçado
+    base_def: 12
+    refine: 5
+  - slot: garment
+    name: Manto do Deus Antigo
+    base_def: 20
+    refine: 7
+  - slot: shoes
+    name: Botas de Combate
+    base_def: 16
+    refine: 7
+  - slot: accessory_1
+    name: Anel de Força
+    bonuses: { str: 4 }
+  - slot: accessory_2
+    name: Bracelete
+    bonuses: { str: 3, atk_percent: 5 }
+skills:
+  - name: Dragon Breath
+    level: 10

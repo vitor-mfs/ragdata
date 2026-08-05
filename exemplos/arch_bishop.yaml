@@ -1,0 +1,62 @@
+# Exemplo de build de suporte — mostra a análise de conjuração.
+# Repare que `stats` traz os valores BASE (o número da esquerda na janela de
+# status), nunca o total com bônus.
+name: Lia
+job: Arcebispo
+base_level: 175
+job_level: 60
+goal: support
+stats:
+  str: 1
+  agi: 40
+  vit: 80
+  int: 120
+  dex: 110
+  luk: 20
+equipment:
+  - slot: right_hand
+    name: Cajado da Sabedoria
+    weapon_type: Staff
+    weapon_level: 4
+    base_atk: 60
+    base_matk: 180
+    refine: 9
+    slots: 1
+    cards:
+      - name: Carta Espinha Dorsal
+        note: "-15% de tempo de conjuração variável"
+        bonuses: { variable_cast_percent: 15 }
+  - slot: left_hand
+    name: Livro Sagrado
+    base_def: 45
+    refine: 7
+  - slot: armor
+    name: Manto Sacerdotal
+    base_def: 70
+    refine: 8
+    bonuses: { int: 3, max_sp_percent: 10 }
+  - slot: head_top
+    name: Tiara Abençoada
+    base_def: 10
+    refine: 6
+    bonuses: { int: 2 }
+  - slot: garment
+    name: Manto de Seda
+    base_def: 18
+    refine: 7
+  - slot: shoes
+    name: Sapatos de Cura
+    base_def: 14
+    refine: 7
+    bonuses: { max_sp_percent: 5 }
+  - slot: accessory_1
+    name: Rosário
+    bonuses: { int: 2, mdef_flat: 5 }
+  - slot: accessory_2
+    name: Anel de Sabedoria
+    bonuses: { int: 3, variable_cast_percent: 10 }
+skills:
+  - name: Heal
+    level: 10
+  - name: Sanctuary
+    level: 10

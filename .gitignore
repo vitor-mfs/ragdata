@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.env
+
+# Tabelas do rAthena baixadas em runtime (GPL-3.0) — não versionadas de propósito.
+# Ver README > "Dados de jogo e licenças".
+gamedata/
+*.sqlite3
