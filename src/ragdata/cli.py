@@ -10,13 +10,14 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from . import analysis, ingest
+from . import analysis, ingest, needs
 from .config import RATHENA_TABLES, get_settings
 from .engine import compute
 from .errors import RagdataError
 from .models import Goal
 from .setup_data import download_tables, missing_tables
 from .sources import BrowikiClient, DivinePrideClient
+from .sources.divinepride import ITEM_OPTIONAL_FIELDS
 
 app = typer.Typer(
     add_completion=False,
@@ -230,6 +231,126 @@ def monster(
 
 
 @app.command()
+def find(
+    necessidade: Annotated[
+        str,
+        typer.Argument(
+            help=(
+                "O que você precisa, em texto livre: 'resistência a dragão', 'dano em amorfo', "
+                "'dano mágico contra fogo', 'dano de [Sopro do Dragão]', 'recarga de [Esquife de Gelo]'."
+            )
+        ),
+    ],
+    kind: Annotated[
+        str | None,
+        typer.Option(
+            "--kind", "-k",
+            help="Tipo explícito (" + ", ".join(k.value for k in needs.NeedKind) + "); aí o argumento é só o alvo.",
+        ),
+    ] = None,
+    category: Annotated[
+        list[str] | None,
+        typer.Option("--category", "-c", help="arma, armadura, carta ou sombra (padrão: armadura e arma)."),
+    ] = None,
+    subtype: Annotated[
+        list[str] | None,
+        typer.Option("--subtype", "-s", help="Subtipo do site ou apelido: capa, bota, escudo, acessório, bastarda…"),
+    ] = None,
+    job: Annotated[list[str] | None, typer.Option("--job", "-j", help="Classe que precisa poder usar o item.")] = None,
+    min_level: Annotated[int | None, typer.Option("--min-level", help="Nível necessário mínimo.")] = None,
+    max_level: Annotated[int | None, typer.Option("--max-level", help="Nível necessário máximo.")] = None,
+    min_slots: Annotated[
+        int | None, typer.Option("--min-slots", help="Slots mínimos (deduzidos do sufixo numérico do nome).")
+    ] = None,
+    limit: Annotated[int, typer.Option("--limit", "-n", help="Quantos candidatos consultar na API (1 req/s).")] = 25,
+    pages: Annotated[int, typer.Option("--pages", help="Páginas da listagem por categoria (20 itens cada).")] = 3,
+    no_details: Annotated[
+        bool, typer.Option("--no-details", help="Só a listagem do site, sem ler a descrição pela API.")
+    ] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Saída em JSON.")] = False,
+) -> None:
+    """Acha armas/armaduras do LATAM por necessidade (resistência, dano, habilidade…)."""
+    try:
+        need = needs.parse_need(necessidade, kind=kind)
+        options = needs.SearchOptions(
+            categories=needs.resolve_categories(category),
+            sub_types=needs.resolve_sub_types(subtype),
+            job_ids=needs.resolve_job_ids(job),
+            min_level=min_level,
+            max_level=max_level,
+            min_slots=min_slots,
+            max_pages=pages,
+            max_details=limit,
+            details=not no_details,
+        )
+    except ValueError as exc:
+        _fail(str(exc))
+
+    if not no_details and not as_json:
+        err_console.print(
+            f"[dim]Buscando «{need.label}» na base LATAM e lendo até {limit} itens na API (1 req/s)…[/]"
+        )
+    try:
+        with DivinePrideClient() as client:
+            resultado = needs.find_equipment(client, need, options)
+    except RagdataError as exc:
+        _fail(str(exc))
+
+    if as_json:
+        console.print_json(json.dumps(resultado, ensure_ascii=False))
+        return
+
+    _print_find_result(resultado)
+
+
+def _print_find_result(resultado: dict) -> None:
+    need = resultado["necessidade"]
+    console.print(
+        f"[bold]{need['descricao']}[/] — base LATAM, {', '.join(resultado['categorias'])} — "
+        f"{resultado['candidatos']} candidatos, {resultado['consultados']} consultados"
+    )
+
+    itens = resultado["itens"]
+    if itens:
+        table = Table(show_lines=True)
+        table.add_column("Melhor", justify="right", style="bold green")
+        table.add_column("Item")
+        table.add_column("Subtipo", style="dim")
+        table.add_column("Nv", justify="right")
+        table.add_column("Efeitos")
+        for item in itens:
+            melhor = item["melhor_valor"]
+            valor = f"{melhor:g}%" if melhor is not None else "—"
+            efeitos = []
+            for efeito in item["efeitos"]:
+                prefixo = f"[dim]{efeito['contexto']}[/] " if efeito["contexto"] else ""
+                efeitos.append(f"{prefixo}{efeito['texto']}")
+            table.add_row(
+                valor,
+                f"{item['nome']}\n[dim]#{item['id']} · {item['categoria']}[/]",
+                item["subtipo"],
+                str(item["nivel_necessario"] or "—"),
+                "\n".join(efeitos),
+            )
+        console.print(table)
+    elif resultado["consultados"]:
+        console.print("[yellow]Nenhum item consultado tem uma linha de efeito reconhecível para essa necessidade.[/]")
+
+    if resultado["possiveis"]:
+        console.print("\n[bold]Possíveis[/] [dim](mesma função no Divine Pride, mas sem linha reconhecível):[/]")
+        for item in resultado["possiveis"]:
+            console.print(f"  • {item['nome']} [dim]#{item['id']} · {item['subtipo']}[/]")
+
+    if resultado["nao_consultados"]:
+        console.print(f"\n[bold]Não consultados[/] [dim]({len(resultado['nao_consultados'])}):[/]")
+        for item in resultado["nao_consultados"]:
+            console.print(f"  • {item['nome']} [dim]#{item['id']} · {item['categoria']} · {item['subtipo']}[/]")
+
+    for nota in resultado["notas"]:
+        console.print(f"\n[yellow]![/] {nota}")
+
+
+@app.command()
 def wiki(
     termo: Annotated[str, typer.Argument(help="Título ou busca no browiki")],
     max_chars: Annotated[int, typer.Option(help="Tamanho máximo do texto.")] = 4000,
@@ -248,7 +369,10 @@ def doctor() -> None:
     """Verifica a instalação: tabelas, cache, chave de API e campos do Divine Pride."""
     settings = get_settings()
     console.print(f"[bold]Cache:[/] {settings.cache_dir}")
-    console.print(f"[bold]Servidor Divine Pride:[/] {settings.divine_pride_server}")
+    console.print(
+        f"[bold]Servidor Divine Pride:[/] {settings.divine_pride_server} "
+        f"[dim](idioma {settings.divine_pride_language})[/]"
+    )
 
     faltando = missing_tables(settings)
     if faltando:
@@ -270,7 +394,8 @@ def doctor() -> None:
         except RagdataError as exc:
             console.print(f"  [red]✗[/] {kind} {entity_id}: {exc}")
             continue
-        vazios = [k for k, v in data.items() if k != "raw" and v in (None, "")]
+        opcionais = ITEM_OPTIONAL_FIELDS if kind == "item" else {"monster_type", "region"}
+        vazios = [k for k, v in data.items() if k != "raw" and k not in opcionais and v in (None, "")]
         if vazios:
             console.print(
                 f"  [yellow]![/] {kind} {entity_id}: campos sem valor → {', '.join(vazios)}"

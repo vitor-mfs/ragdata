@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from ragdata.cache import Cache
-from ragdata.errors import ConfigError, NotFound, SourceError
+from ragdata.errors import ConfigError, NotFound, SourceError, WrongRegion
 from ragdata.models import Element, Race, Size
 from ragdata.ratelimit import RateLimiter
 from ragdata.sources.browiki import BrowikiClient
@@ -121,8 +121,11 @@ class TestDivinePrideClient:
         def handler(request: httpx.Request) -> httpx.Response:
             chamadas["n"] += 1
             assert request.url.params["apiKey"] == "chave-de-teste"
-            assert request.url.params["server"] == "bRO"
-            return httpx.Response(200, json=ITEM_PAYLOAD)
+            # A API atual escolhe a região pelo header; a query `server` é o contrato antigo.
+            assert request.headers["x-server"] == "LATAM"
+            assert request.headers["accept-language"] == "pt"
+            assert request.url.params["server"] == "LATAM"
+            return httpx.Response(200, json={**ITEM_PAYLOAD, "region": "LATAM"})
 
         cache = Cache(settings.http_cache_path, settings.cache_ttl_seconds)
         with DivinePrideClient(
@@ -183,6 +186,83 @@ class TestDivinePrideClient:
             with pytest.raises(SourceError, match="1 req/s"):
                 client.item(1201)
 
+    def test_429_curto_espera_e_repete(self, settings, sem_espera) -> None:
+        respostas = [httpx.Response(429, headers={"Retry-After": "2"}), httpx.Response(200, json=ITEM_PAYLOAD)]
+        dormidas: list[float] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return respostas.pop(0)
+
+        cache = Cache(settings.http_cache_path, settings.cache_ttl_seconds)
+        with DivinePrideClient(
+            settings, client=_fake_client(handler), cache=cache, limiter=sem_espera, sleep=dormidas.append
+        ) as client:
+            assert client.item(1201)["name"] == "Adaga"
+
+        assert dormidas == [2.0]
+        assert respostas == []
+
+    def test_429_longo_nao_espera(self, settings, sem_espera) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(429, headers={"Retry-After": "600"})
+
+        cache = Cache(settings.http_cache_path, settings.cache_ttl_seconds)
+        with DivinePrideClient(
+            settings, client=_fake_client(handler), cache=cache, limiter=sem_espera,
+            sleep=lambda s: pytest.fail("não deveria dormir 10 minutos"),
+        ) as client:
+            with pytest.raises(SourceError, match="600 s"):
+                client.item(1201)
+
+    def test_regiao_diferente_da_pedida_e_erro(self, settings, sem_espera) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={**ITEM_PAYLOAD, "region": "kROM"})
+
+        cache = Cache(settings.http_cache_path, settings.cache_ttl_seconds)
+        with DivinePrideClient(
+            settings, client=_fake_client(handler), cache=cache, limiter=sem_espera
+        ) as client:
+            with pytest.raises(WrongRegion, match="kROM") as info:
+                client.item(1201)
+            assert info.value.expected == "LATAM"
+            # Nada de outra região vai para o cache.
+            assert cache.get_json("dp:LATAM:pt:Item:1201") is None
+
+    def test_servidor_e_idioma_por_chamada(self, settings, sem_espera) -> None:
+        vistos: list[tuple[str, str]] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            vistos.append((request.headers["x-server"], request.headers["accept-language"]))
+            return httpx.Response(200, json={**ITEM_PAYLOAD, "region": request.headers["x-server"]})
+
+        cache = Cache(settings.http_cache_path, settings.cache_ttl_seconds)
+        with DivinePrideClient(
+            settings, client=_fake_client(handler), cache=cache, limiter=sem_espera
+        ) as client:
+            client.item(1201, server="bRO", language="en")
+            client.item(1201)  # LATAM/pt: chave de cache diferente → nova chamada
+
+        assert vistos == [("bRO", "en"), ("LATAM", "pt")]
+
+    def test_campos_novos_da_api_sao_normalizados(self) -> None:
+        payload = {
+            "id": 501, "name": "Poção Vermelha", "aegisName": "Red_Potion", "type": "Healing", "subType": "",
+            "description": "Uma poção.", "sellPrice": 25, "buyPrice": 50, "weight": 70,
+            "allJobsAllowed": True, "allowedJobIds": [], "sources": [], "scripts": [], "region": "LATAM",
+        }
+        data = normalize_item(payload)
+        assert data["type"] == "Healing" and data["sub_type"] is None
+        assert data["region"] == "LATAM" and data["sell_price"] == 25
+        assert data["allowed_job_ids"] == []
+
+    def test_monstro_da_api_atual_por_nome(self) -> None:
+        alvo = monster_to_target(normalize_monster({
+            "id": 1002, "name": "Poring", "level": 1, "race": "Plant", "element": "Water", "elementLevel": 1,
+            "size": "Medium", "type": "Normal", "health": 50, "def": 0, "mDef": 5, "hit": 0, "flee": 0,
+        }))
+        assert alvo.race is Race.PLANT and alvo.element is Element.WATER and alvo.element_level == 1
+        assert alvo.size is Size.MEDIUM and alvo.magic_defense == 5 and alvo.is_mvp is False
+
     def test_sem_chave_falha_antes_da_rede(self, settings, sem_espera) -> None:
         def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
             raise AssertionError("não deveria chamar a rede sem chave")
@@ -199,14 +279,17 @@ class TestDivinePrideClient:
 
     def test_busca_por_nome_extrai_os_links(self, settings, sem_espera) -> None:
         html = """
-        <ul>
-          <li><a href="/database/item/1201/knife">Adaga</a></li>
-          <li><a href="/database/item/1202/knife-">Adaga+</a></li>
-          <li><a href="/database/monster/1002/poring">Poring</a></li>
-        </ul>
+        <table><tr><td><a href="/database/item/1201">Adaga</a></td></tr>
+          <tr><td><a href="/database/item/1202">Adaga+</a></td></tr>
+          <tr><td><a href="/database/item/7607">(null)</a></td></tr>
+          <tr><td><a href="/database/monster/1002/poring">Poring</a></td></tr></table>
         """
 
         def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url.path == "/database"
+            assert request.url.params["q"] == "adaga"
+            assert "includeDescription" not in request.url.params
+            assert request.headers["accept-language"] == "pt-BR,pt;q=0.9"
             return httpx.Response(200, text=html)
 
         cache = Cache(settings.http_cache_path, settings.cache_ttl_seconds)
