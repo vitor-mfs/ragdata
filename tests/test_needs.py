@@ -16,7 +16,6 @@ from ragdata import cli, mcp_server, needs
 from ragdata.cache import Cache
 from ragdata.errors import ConfigError, SourceError
 from ragdata.needs import NeedKind, SearchOptions, find_equipment, match_lines, parse_need
-from ragdata.ratelimit import RateLimiter
 from ragdata.sources.divinepride import DivinePrideClient, parse_item_listing
 
 # --- descrições reais (LATAM, pt) --------------------------------------------
@@ -364,16 +363,6 @@ def _client(settings, handler, sem_espera) -> DivinePrideClient:
         cache=Cache(settings.http_cache_path, settings.cache_ttl_seconds),
         limiter=sem_espera,
     )
-
-
-@pytest.fixture
-def sem_espera() -> RateLimiter:
-    tempo = {"agora": 0.0}
-
-    def sleep(segundos: float) -> None:
-        tempo["agora"] += segundos
-
-    return RateLimiter(1.0, sleep=sleep, monotonic=lambda: tempo["agora"])
 
 
 class TestListagem:

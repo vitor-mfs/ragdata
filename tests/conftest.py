@@ -16,6 +16,7 @@ from ragdata.models import (
     EquipSlot,
     WeaponType,
 )
+from ragdata.ratelimit import RateLimiter
 
 #: Tabelas reduzidas, com o mínimo para os testes serem determinísticos.
 #: Os valores vêm das tabelas reais do rAthena (db/re).
@@ -197,3 +198,14 @@ def rune_knight() -> Character:
             Equipment(slot=EquipSlot.ARMOR, name="Armadura", base_def=85, refine=7),
         ],
     )
+
+
+@pytest.fixture
+def sem_espera() -> RateLimiter:
+    """Limitador de 1 req/s que avança um relógio falso em vez de dormir."""
+    tempo = {"agora": 0.0}
+
+    def sleep(segundos: float) -> None:
+        tempo["agora"] += segundos
+
+    return RateLimiter(1.0, sleep=sleep, monotonic=lambda: tempo["agora"])

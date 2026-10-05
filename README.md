@@ -67,6 +67,7 @@ ragdata wiki "Cavaleiro Rúnico"
 ragdata find "resistência a dragão"
 ragdata find "dano em amorfo" -c arma -s "espada de duas mãos" -j "Cavaleiro Rúnico"
 ragdata find "dano de [Sopro do Dragão]" --min-level 150 --json
+ragdata web   # o mesmo, numa página local no navegador
 
 # Diagnóstico da instalação (tabelas, cache, API key, campos do Divine Pride)
 ragdata doctor
@@ -137,6 +138,20 @@ Como funciona, e por que assim:
 Filtros: `-c/--category` (arma, armadura, carta, sombra), `-s/--subtype` (capa,
 bota, escudo, acessório, espada de duas mãos…), `-j/--job` (classe),
 `--min-level`/`--max-level`, `--min-slots`, `--pages`, `--no-details`, `--json`.
+
+### Interface web para testar
+
+```bash
+ragdata web            # sobe em http://127.0.0.1:8765 e abre o navegador
+ragdata web -p 9000 --no-browser
+```
+
+A página roda só na sua máquina e usa o mesmo cliente da CLI (cache, 1 req/s):
+caixa de texto com exemplos clicáveis, filtros (categoria, subtipo, classe,
+nível, slots), modo estruturado (tipo + alvo), resultados com link para o
+Divine Pride, as linhas de efeito com condição e o JSON bruto. A busca fica na
+URL (`/?necessidade=resistência+a+dragão&categoria=armadura`), então dá para
+compartilhar ou repetir. Sem `DIVINE_PRIDE_API_KEY` ela mostra só a listagem.
 
 ## Uso como servidor MCP (recomendado)
 

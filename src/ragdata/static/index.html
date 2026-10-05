@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ragdata · busca por necessidade</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2433; --muted: #66707f; --line: #dde1e7;
+    --accent: #2f6fed; --accent-soft: #e8efff; --ok: #1f8a4c; --warn: #b7791f; --bad: #c0392b;
+    --chip: #eef1f5; --tag: #f1e9ff; --tag-text: #5b3fa0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --panel: #1a1f29; --text: #e6e9ef; --muted: #98a2b3; --line: #2a3140;
+      --accent: #7aa2ff; --accent-soft: #1f2a44; --ok: #4ccb7f; --warn: #e0a84a; --bad: #ff6b5b;
+      --chip: #232a37; --tag: #2b2440; --tag-text: #c9b6ff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 18px 24px; border-bottom: 1px solid var(--line); background: var(--panel);
+           display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 18px; }
+  header .status { color: var(--muted); font-size: 13px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 20px 24px 60px; }
+  form { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label, .legend { font-size: 12px; color: var(--muted); }
+  input[type=text], input[type=number], select {
+    background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+    padding: 8px 10px; font: inherit; }
+  input[type=text].main { min-width: 340px; font-size: 16px; }
+  button { background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 9px 16px;
+           font: inherit; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: progress; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 4px; }
+  .chip { background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px;
+          font-size: 13px; cursor: pointer; }
+  .chip:hover { border-color: var(--accent); }
+  details.adv { margin-top: 12px; }
+  details.adv summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  .adv .row { margin-top: 10px; }
+  .checks { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .checks label { font-size: 14px; display: flex; gap: 5px; align-items: center; }
+  .banner { margin-top: 14px; padding: 10px 12px; border-radius: 8px; background: var(--accent-soft);
+            border: 1px solid var(--line); font-size: 14px; }
+  .banner.warn { border-color: var(--warn); }
+  .banner.bad { border-color: var(--bad); }
+  .summary { margin: 18px 0 8px; display: flex; gap: 16px; flex-wrap: wrap; align-items: baseline; }
+  .summary h2 { margin: 0; font-size: 20px; }
+  .summary .meta { color: var(--muted); font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line);
+          border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 12px; border-top: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; border-top: 0; }
+  td.val { font-weight: 700; color: var(--ok); white-space: nowrap; font-size: 16px; }
+  td .sub { color: var(--muted); font-size: 12px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .eff { margin: 0 0 6px; }
+  .eff .ctx { color: var(--muted); font-size: 12px; display: block; }
+  .tag { display: inline-block; background: var(--tag); color: var(--tag-text); border-radius: 4px;
+         padding: 0 6px; font-size: 11px; margin-left: 6px; vertical-align: middle; }
+  section { margin-top: 22px; }
+  section h3 { margin: 0 0 8px; font-size: 15px; }
+  section h3 .n { color: var(--muted); font-weight: 400; }
+  .list { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; }
+  .list .it { padding: 7px 0; border-top: 1px solid var(--line); }
+  .list .it:first-child { border-top: 0; }
+  pre { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+        padding: 10px; font-size: 12.5px; margin: 6px 0 0; }
+  .notes li { margin: 4px 0; color: var(--muted); font-size: 14px; }
+  .empty { color: var(--muted); padding: 14px; }
+  #loading { display: none; margin-top: 14px; color: var(--muted); }
+  #loading.on { display: block; }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--line);
+          border-top-color: var(--accent); border-radius: 50%; animation: s .8s linear infinite;
+          vertical-align: -2px; margin-right: 6px; }
+  @keyframes s { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>ragdata · busca por necessidade</h1>
+  <span class="status" id="estado">…</span>
+</header>
+<main>
+  <form id="f">
+    <div class="row">
+      <div class="field" style="flex:1">
+        <label for="necessidade">O que você precisa?</label>
+        <input class="main" type="text" id="necessidade" name="necessidade"
+               placeholder="resistência a dragão · dano em amorfo · dano de [Sopro do Dragão]" autofocus>
+      </div>
+      <button type="submit" id="go">Buscar</button>
+    </div>
+    <div class="chips" id="exemplos"></div>
+    <div class="checks" style="margin-top:8px">
+      <span class="legend">Categorias:</span>
+      <label><input type="checkbox" name="categoria" value="armadura" checked> armadura</label>
+      <label><input type="checkbox" name="categoria" value="arma" checked> arma</label>
+      <label><input type="checkbox" name="categoria" value="carta"> carta</label>
+      <label><input type="checkbox" name="categoria" value="sombra"> sombra</label>
+      <label style="margin-left:auto"><input type="checkbox" name="detalhes" id="detalhes" checked>
+        ler descrições na API (1 req/s)</label>
+    </div>
+    <details class="adv">
+      <summary>Filtros e modo estruturado</summary>
+      <div class="row">
+        <div class="field"><label>Tipo (em vez de texto livre)</label>
+          <select name="tipo" id="tipo"><option value="">automático</option></select></div>
+        <div class="field"><label>Alvo (raça/propriedade/tamanho/habilidade)</label>
+          <input type="text" name="alvo" id="alvo" placeholder="dragao, fogo, grande, Sopro do Dragão"></div>
+        <div class="field"><label>Subtipos (vírgula)</label>
+          <input type="text" name="subtipo" placeholder="capa, bota, espada de duas mãos"></div>
+        <div class="field"><label>Classes (vírgula)</label>
+          <input type="text" name="classe" placeholder="Cavaleiro Rúnico"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Nível mín.</label><input type="number" name="nivel_min" min="0" style="width:90px"></div>
+        <div class="field"><label>Nível máx.</label><input type="number" name="nivel_max" min="0" style="width:90px"></div>
+        <div class="field"><label>Slots mín.</label><input type="number" name="slots_min" min="0" max="4" style="width:90px"></div>
+        <div class="field"><label>Itens lidos na API</label><input type="number" name="limite" min="0" value="25" style="width:90px"></div>
+        <div class="field"><label>Páginas/categoria</label><input type="number" name="paginas" min="1" value="3" style="width:90px"></div>
+      </div>
+    </details>
+  </form>
+  <div id="banner"></div>
+  <div id="loading"><span class="spin"></span><span id="loadingmsg"></span></div>
+  <div id="out"></div>
+</main>
+<script>
+(function () {
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const form = $("#f"), out = $("#out"), banner = $("#banner"), loading = $("#loading");
+  let temChave = true;
+
+  fetch("/api/estado").then(r => r.json()).then(e => {
+    temChave = !!e.api_key_configurada;
+    $("#estado").textContent = `servidor ${e.servidor} · idioma ${e.idioma} · chave da API ${temChave ? "ok" : "ausente"}`;
+    if (!temChave) {
+      $("#detalhes").checked = false;
+      banner.innerHTML = '<div class="banner warn">Sem <code>DIVINE_PRIDE_API_KEY</code>: os resultados vêm só da listagem do site, sem as linhas de efeito. Exporte a chave e reinicie <code>ragdata web</code>.</div>';
+    }
+  }).catch(() => { $("#estado").textContent = "estado indisponível"; });
+
+  fetch("/api/vocabulario").then(r => r.json()).then(v => {
+    const sel = $("#tipo");
+    for (const [k, t] of Object.entries(v.tipos || {})) {
+      const o = document.createElement("option"); o.value = k; o.textContent = `${k} — ${t.descricao}`; sel.appendChild(o);
+    }
+    const ex = $("#exemplos");
+    for (const e of v.exemplos || []) {
+      const c = document.createElement("span"); c.className = "chip"; c.textContent = e;
+      c.onclick = () => { $("#necessidade").value = e; $("#tipo").value = ""; $("#alvo").value = ""; form.requestSubmit(); };
+      ex.appendChild(c);
+    }
+  }).catch(() => {});
+
+  function query() {
+    const p = new URLSearchParams();
+    const fd = new FormData(form);
+    const nec = (fd.get("necessidade") || "").trim(); if (nec) p.set("necessidade", nec);
+    const tipo = fd.get("tipo"); if (tipo) p.set("tipo", tipo);
+    const alvo = (fd.get("alvo") || "").trim(); if (alvo) p.set("alvo", alvo);
+    for (const c of fd.getAll("categoria")) p.append("categoria", c);
+    for (const name of ["subtipo", "classe"]) {
+      for (const v of (fd.get(name) || "").split(",").map(s => s.trim()).filter(Boolean)) p.append(name, v);
+    }
+    for (const name of ["nivel_min", "nivel_max", "slots_min", "limite", "paginas"]) {
+      const v = (fd.get(name) || "").toString().trim(); if (v !== "") p.set(name, v);
+    }
+    p.set("detalhes", $("#detalhes").checked ? "1" : "0");
+    return p;
+  }
+
+  function fill(p) {
+    if (p.get("necessidade")) $("#necessidade").value = p.get("necessidade");
+    if (p.get("tipo")) $("#tipo").value = p.get("tipo");
+    if (p.get("alvo")) $("#alvo").value = p.get("alvo");
+    const cats = p.getAll("categoria");
+    if (cats.length) for (const cb of form.querySelectorAll('input[name=categoria]')) cb.checked = cats.includes(cb.value);
+    if (p.getAll("subtipo").length) form.subtipo.value = p.getAll("subtipo").join(", ");
+    if (p.getAll("classe").length) form.classe.value = p.getAll("classe").join(", ");
+    for (const name of ["nivel_min", "nivel_max", "slots_min", "limite", "paginas"]) if (p.get(name)) form[name].value = p.get(name);
+    if (p.has("detalhes")) $("#detalhes").checked = p.get("detalhes") !== "0";
+  }
+
+  function efeito(e) {
+    const ctx = e.contexto ? `<span class="ctx">${esc(e.contexto)}</span>` : "";
+    const tag = e.conjunto ? '<span class="tag">conjunto</span>' : "";
+    return `<p class="eff">${ctx}${esc(e.texto)}${tag}</p>`;
+  }
+  const link = (it) => `<a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.nome)}</a>`;
+  const valor = (v, efs) => v == null ? "—" : (efs && efs.some(e => e.valor != null && e.percentual) ? `${v}%` : `${v}`);
+
+  function render(r) {
+    const n = r.necessidade;
+    let h = `<div class="summary"><h2>${esc(n.descricao)}</h2>
+      <span class="meta">base ${esc(r.servidor)} · ${r.categorias.map(esc).join(", ")} · ${r.candidatos} candidatos · ${r.consultados} lidos na API
+      · excluídos: ${r.excluidos.fora_do_latam} fora do LATAM, ${r.excluidos.sem_nome_latam} sem nome, ${r.excluidos.sem_slots_suficientes} por slots</span></div>`;
+    if (r.itens.length) {
+      h += `<table><thead><tr><th>Melhor</th><th>Item</th><th>Subtipo</th><th>Nv</th><th>Efeitos que atendem</th></tr></thead><tbody>`;
+      for (const it of r.itens) {
+        h += `<tr><td class="val">${valor(it.melhor_valor, it.efeitos)}</td>
+          <td>${link(it)}<div class="sub">#${it.id} · ${esc(it.categoria)}${it.slots != null ? ` · ${it.slots} slot(s)` : ""}</div></td>
+          <td>${esc(it.subtipo)}</td><td>${it.nivel_necessario ?? "—"}</td><td>${it.efeitos.map(efeito).join("")}</td></tr>`;
+      }
+      h += `</tbody></table>`;
+    } else if (r.consultados) {
+      h += `<div class="list empty">Nenhum item lido tem uma linha de efeito reconhecível para essa necessidade.</div>`;
+    }
+    if (r.possiveis.length) {
+      h += `<section><h3>Possíveis <span class="n">(mesma função no Divine Pride, sem linha reconhecível) · ${r.possiveis.length}</span></h3><div class="list">`;
+      for (const it of r.possiveis) {
+        h += `<div class="it">${link(it)} <span class="sub">#${it.id} · ${esc(it.subtipo)}</span>
+          <details><summary class="sub">descrição</summary><pre>${esc(it.descricao)}</pre></details></div>`;
+      }
+      h += `</div></section>`;
+    }
+    if (r.nao_consultados.length) {
+      h += `<section><h3>${r.consultados ? "Não lidos na API" : "Candidatos da listagem"} <span class="n">· ${r.nao_consultados.length}</span></h3><div class="list">`;
+      for (const it of r.nao_consultados) {
+        h += `<div class="it">${link(it)} <span class="sub">#${it.id} · ${esc(it.categoria)} · ${esc(it.subtipo)}${it.nivel_necessario ? ` · nv ${it.nivel_necessario}` : ""}</span></div>`;
+      }
+      h += `</div></section>`;
+    }
+    if (r.notas.length) h += `<section><ul class="notes">${r.notas.map(x => `<li>${esc(x)}</li>`).join("")}</ul></section>`;
+    h += `<section><details><summary class="sub">JSON bruto</summary><pre>${esc(JSON.stringify(r, null, 2))}</pre></details></section>`;
+    out.innerHTML = h;
+  }
+
+  let timer = null;
+  async function run() {
+    const p = query();
+    history.replaceState(null, "", "?" + p.toString());
+    out.innerHTML = ""; banner.querySelector(".bad")?.remove();
+    $("#go").disabled = true; loading.classList.add("on");
+    const t0 = Date.now();
+    const tick = () => { $("#loadingmsg").textContent = `consultando o Divine Pride (1 req/s)… ${Math.round((Date.now() - t0) / 1000)} s`; };
+    tick(); timer = setInterval(tick, 500);
+    try {
+      const r = await fetch("/api/find?" + p.toString());
+      const data = await r.json();
+      if (!data.ok) {
+        out.innerHTML = `<div class="banner bad">${esc(data.erro)}</div>`;
+        if (data.vocabulario) out.innerHTML += `<details><summary class="sub">vocabulário aceito</summary><pre>${esc(JSON.stringify(data.vocabulario, null, 2))}</pre></details>`;
+      } else {
+        render(data);
+      }
+    } catch (e) {
+      out.innerHTML = `<div class="banner bad">Falha ao falar com o servidor local: ${esc(e)}</div>`;
+    } finally {
+      clearInterval(timer); loading.classList.remove("on"); $("#go").disabled = false;
+    }
+  }
+
+  form.addEventListener("submit", (ev) => { ev.preventDefault(); run(); });
+  const initial = new URLSearchParams(location.search);
+  if (initial.get("necessidade") || (initial.get("tipo") && initial.get("alvo"))) {
+    // Espera o vocabulário preencher o <select> de tipo antes de aplicar a URL.
+    setTimeout(() => { fill(initial); run(); }, 150);
+  }
+})();
+</script>
+</body>
+</html>

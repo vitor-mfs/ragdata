@@ -351,6 +351,21 @@ def _print_find_result(resultado: dict) -> None:
 
 
 @app.command()
+def web(
+    host: Annotated[str, typer.Option("--host", help="Endereço para escutar.")] = "127.0.0.1",
+    port: Annotated[int, typer.Option("--port", "-p", help="Porta.")] = 8765,
+    no_browser: Annotated[bool, typer.Option("--no-browser", help="Não abre o navegador automaticamente.")] = False,
+) -> None:
+    """Abre uma interface web local para testar a busca por necessidade."""
+    from .web import serve
+
+    try:
+        serve(host, port, open_browser=not no_browser)
+    except OSError as exc:
+        _fail(f"Não consegui escutar em {host}:{port}: {exc}")
+
+
+@app.command()
 def wiki(
     termo: Annotated[str, typer.Argument(help="Título ou busca no browiki")],
     max_chars: Annotated[int, typer.Option(help="Tamanho máximo do texto.")] = 4000,
