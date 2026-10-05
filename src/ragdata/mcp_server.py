@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import analysis, ingest
+from . import analysis, ingest, needs
 from .config import get_settings
 from .engine import compute
 from .errors import RagdataError
@@ -43,6 +43,11 @@ Fluxo esperado quando alguém manda prints ou descreve um personagem:
    `buscar_monstro` e passe o `monster_id`.
 4. Chame `analisar_personagem`.
 5. Para responder "e se eu mudar X?", use `simular_mudanca`.
+6. Para "que arma/armadura me dá resistência a Dragão / dano em Amorfo / dano de
+   tal habilidade?", use `buscar_equipamento_por_necessidade` — ela só devolve
+   itens listados na base LATAM do Divine Pride e mostra a linha exata da
+   descrição que atende ao pedido. Prefira `tipo` + `alvo` estruturados; o nome
+   de habilidade deve ser o do cliente LATAM em português ("Sopro do Dragão").
 
 Os números saem das fórmulas Renewal do rAthena. Efeitos de carta em texto e
 dano de habilidade contra alvo não são calculados — quando forem decisivos,
@@ -234,6 +239,75 @@ def buscar_monstro(monster_id: int | None = None, nome: str | None = None) -> di
         "resultados": resultados,
         "nota": "Busca por nome é melhor-esforço; use `monster_id` para dados completos.",
     }
+
+
+@server.tool(
+    name="buscar_equipamento_por_necessidade",
+    description=(
+        "Acha armas e armaduras do Ragnarok LATAM que atendem a uma necessidade, usando o Divine Pride "
+        "(só itens listados na base LATAM). Informe `tipo` + `alvo` (preferível) ou `necessidade` em texto "
+        "livre. Tipos: " + ", ".join(k.value for k in needs.NeedKind) + ". Alvos: raça (amorfo, morto-vivo, "
+        "bruto, planta, inseto, peixe, demonio, humanoide, anjo, dragao, jogador), propriedade (neutro, agua, "
+        "terra, fogo, vento, veneno, sagrado, sombrio, fantasma, maldito), tamanho (pequeno, medio, grande), "
+        "atributo (FOR, AGI, VIT, INT, DES, SOR) ou o nome da habilidade em português do LATAM. `categorias`: "
+        "arma, armadura, carta, sombra (padrão: armadura e arma). `subtipos`: capa, bota, escudo, acessório, "
+        "espada de duas mãos… `classes`: nomes de classe. Cada item vem com as linhas da descrição que "
+        "atendem ao pedido, a condição (refino/conjunto) e o percentual, ordenado do maior para o menor. "
+        "Lê até `limite_detalhes` itens na API a 1 req/s — use filtros para buscas amplas."
+    ),
+)
+def buscar_equipamento_por_necessidade(
+    necessidade: str | None = None,
+    tipo: str | None = None,
+    alvo: str | None = None,
+    categorias: list[str] | None = None,
+    subtipos: list[str] | None = None,
+    classes: list[str] | None = None,
+    nivel_min: int | None = None,
+    nivel_max: int | None = None,
+    slots_min: int | None = None,
+    limite_detalhes: int = 25,
+    paginas: int = 3,
+    detalhes: bool = True,
+) -> dict[str, Any]:
+    if not necessidade and not (tipo and alvo):
+        return {
+            "ok": False,
+            "erro": "Informe `necessidade` (texto livre) ou `tipo` + `alvo`.",
+            "vocabulario": needs.vocabulary(),
+        }
+    try:
+        need = needs.parse_need(necessidade or alvo or "", kind=tipo, target=alvo)
+        options = needs.SearchOptions(
+            categories=needs.resolve_categories(categorias),
+            sub_types=needs.resolve_sub_types(subtipos),
+            job_ids=needs.resolve_job_ids(classes),
+            min_level=nivel_min,
+            max_level=nivel_max,
+            min_slots=slots_min,
+            max_pages=max(1, paginas),
+            max_details=max(0, limite_detalhes),
+            details=detalhes,
+        )
+    except ValueError as exc:
+        return {"ok": False, "erro": str(exc), "vocabulario": needs.vocabulary()}
+    try:
+        with DivinePrideClient() as client:
+            resultado = needs.find_equipment(client, need, options)
+    except RagdataError as exc:
+        return _erro(exc)
+    return {"ok": True, **resultado}
+
+
+@server.tool(
+    name="vocabulario_de_necessidades",
+    description=(
+        "Tipos de necessidade, alvos aceitos (raça, propriedade, tamanho, atributo) e exemplos para "
+        "`buscar_equipamento_por_necessidade`."
+    ),
+)
+def vocabulario_de_necessidades() -> dict[str, Any]:
+    return {"ok": True, **needs.vocabulary()}
 
 
 @server.tool(

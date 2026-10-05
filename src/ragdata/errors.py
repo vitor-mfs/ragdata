@@ -34,6 +34,18 @@ class NotFound(SourceError):
     """O recurso pedido não existe na fonte."""
 
 
+class WrongRegion(SourceError):
+    """A fonte devolveu dados de outro servidor/região que não o pedido."""
+
+    def __init__(self, what: str, *, expected: str, received: str, hint: str = "") -> None:
+        msg = f"Divine Pride devolveu {what} da região {received!r} em vez de {expected!r}."
+        if hint:
+            msg += " " + hint
+        super().__init__(msg)
+        self.expected = expected
+        self.received = received
+
+
 class UnknownJob(RagdataError):
     """Classe não reconhecida."""
 

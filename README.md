@@ -20,6 +20,7 @@ e o contexto de classes/habilidades do [browiki](https://browiki.org).
 | Simulação "e se eu mudar X?" com diferença número a número | ✅ |
 | Leitura de personagem a partir de prints | ✅ (via MCP, o Claude lê a imagem) |
 | Consulta de itens/monstros no Divine Pride, com cache e 1 req/s | ✅ |
+| Busca de armas/armaduras por necessidade (resistência a Dragão, dano em Amorfo, dano de habilidade), só itens listados no LATAM | ✅ |
 | Contexto de classe/habilidade do browiki | ✅ |
 | Simulação de dano por skill contra um alvo | ❌ ainda não |
 
@@ -41,7 +42,8 @@ segundo**, e o ragdata respeita esse limite):
 
 ```bash
 export DIVINE_PRIDE_API_KEY="sua-chave"
-export RAGDATA_DP_SERVER="bRO"   # base usada pelo cliente LATAM (padrão)
+export RAGDATA_DP_SERVER="LATAM"   # base do Ragnarok LATAM no Divine Pride (padrão)
+export RAGDATA_DP_LANGUAGE="pt"    # idioma dos nomes e descrições (padrão)
 ```
 
 ## Uso pela linha de comando
@@ -60,6 +62,11 @@ ragdata simulate exemplos/rune_knight.yaml '{"stats":{"agi":120},"refine":{"Espa
 ragdata item 1201
 ragdata monster 1002
 ragdata wiki "Cavaleiro Rúnico"
+
+# Que arma/armadura me dá isso? (só itens listados na base LATAM)
+ragdata find "resistência a dragão"
+ragdata find "dano em amorfo" -c arma -s "espada de duas mãos" -j "Cavaleiro Rúnico"
+ragdata find "dano de [Sopro do Dragão]" --min-level 150 --json
 
 # Diagnóstico da instalação (tabelas, cache, API key, campos do Divine Pride)
 ragdata doctor
@@ -91,6 +98,46 @@ equipment:
     refine: 7
 ```
 
+## Busca por necessidade
+
+`ragdata find` responde "qual equipamento me dá X?" a partir do que você precisa:
+
+| Necessidade | Exemplo | Tipo (`--kind`) |
+| --- | --- | --- |
+| Resistência a uma raça | `resistência a dragão`, `aguentar demônio` | `resistencia_raca` |
+| Dano (físico/mágico) a uma raça | `dano em amorfo`, `dano mágico em morto-vivo` | `dano_raca`, `dano_magico_raca` |
+| Resistência a uma propriedade | `resistência a fogo`, `resistência a propriedade sombria` | `resistencia_elemento` |
+| Dano a uma propriedade | `dano em fogo`, `dano mágico contra água` | `dano_elemento`, `dano_magico_elemento` |
+| Dano a um tamanho | `dano em tamanho grande`, `dano mágico em pequeno` | `dano_tamanho`, `dano_magico_tamanho` |
+| Dano de uma habilidade | `dano de [Sopro do Dragão]` | `dano_habilidade` |
+| Recarga de uma habilidade | `recarga de [Esquife de Gelo]` | `recarga_habilidade` |
+| Atributo | `FOR`, `+INT` | `atributo` |
+
+Raças: amorfo, morto-vivo, bruto, planta, inseto, peixe, demônio, humanoide,
+anjo, dragão, jogador. Propriedades: neutro, água, terra, fogo, vento, veneno,
+sagrado, sombrio, fantasma, maldito. Tamanhos: pequeno, médio, grande. Nomes de
+habilidade são os do cliente LATAM em português.
+
+Como funciona, e por que assim:
+
+1. A API do Divine Pride só responde por ID e proíbe enumerar IDs em massa. Os
+   candidatos vêm da **listagem do site** (`/database/item/<categoria>`), com o
+   filtro de função do item (ex.: "Reduce damage taken from a race") e a
+   palavra-chave na descrição ("Dragão"), servida na base **LATAM em português**.
+2. Só entram linhas com o badge **LATAM** e com nome em português. Itens que o
+   Divine Pride tem na base LATAM mas sem nome (provavelmente não lançados) são
+   descartados e contados em `excluidos.sem_nome_latam`.
+3. Cada candidato é lido pela **API** com `x-server: LATAM` (cache em disco,
+   1 req/s). Resposta 404 ou de outra região → fora. Por padrão até 25 itens
+   são consultados (`--limit`); o resto fica em `nao_consultados`.
+4. As linhas da descrição que atendem ao pedido são extraídas com a condição
+   (refino, conjunto) e o percentual; os itens vêm ordenados pelo maior valor.
+   Candidatos sem linha reconhecível aparecem em `possiveis`, com a descrição.
+
+Filtros: `-c/--category` (arma, armadura, carta, sombra), `-s/--subtype` (capa,
+bota, escudo, acessório, espada de duas mãos…), `-j/--job` (classe),
+`--min-level`/`--max-level`, `--min-slots`, `--pages`, `--no-details`, `--json`.
+
 ## Uso como servidor MCP (recomendado)
 
 É aqui que a leitura por print funciona: o Claude enxerga a imagem, extrai os
@@ -110,6 +157,8 @@ Ferramentas expostas:
 | `simular_mudanca` | Compara a build atual com uma alteração de atributos/equipamento |
 | `ler_texto_de_personagem` | Rascunho a partir de uma descrição solta |
 | `buscar_item` / `buscar_monstro` | Divine Pride (com cache e 1 req/s) |
+| `buscar_equipamento_por_necessidade` | Armas/armaduras do LATAM por necessidade (resistência, dano, habilidade…) |
+| `vocabulario_de_necessidades` | Tipos e alvos aceitos pela busca por necessidade |
 | `consultar_browiki` | Texto de uma página do browiki |
 | `estado_do_ragdata` | Diagnóstico: tabelas, cache e chave de API |
 
@@ -142,14 +191,17 @@ e não são versionadas neste repositório — o rAthena é GPL-3.0 e o ragdata 
 O cache fica em `~/.cache/ragdata` (ou `$RAGDATA_CACHE_DIR`).
 
 O Divine Pride e o browiki são consultados pela rede, com cache local de 30 dias
-por padrão (`RAGDATA_CACHE_TTL`, em segundos).
+por padrão (`RAGDATA_CACHE_TTL`, em segundos); as páginas de listagem do Divine
+Pride ficam no cache por até 1 dia, porque mudam quando entram itens novos. A
+documentação da API está em <https://www.divine-pride.net/tools/api-doc>.
 
 ## Variáveis de ambiente
 
 | Variável | Padrão | Para quê |
 | --- | --- | --- |
 | `DIVINE_PRIDE_API_KEY` | — | Chave da API do Divine Pride |
-| `RAGDATA_DP_SERVER` | `bRO` | Servidor consultado no Divine Pride |
+| `RAGDATA_DP_SERVER` | `LATAM` | Servidor (região) consultado no Divine Pride; a busca por necessidade usa sempre `LATAM` |
+| `RAGDATA_DP_LANGUAGE` | `pt` | Idioma dos nomes e descrições (`Accept-Language` da API) |
 | `RAGDATA_CACHE_DIR` | `~/.cache/ragdata` | Onde ficam tabelas e cache HTTP |
 | `RAGDATA_CACHE_TTL` | `2592000` | Validade do cache HTTP, em segundos |
 

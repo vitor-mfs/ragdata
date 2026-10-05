@@ -6,12 +6,25 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_SERVER = "bRO"
-"""Servidor consultado no Divine Pride.
+DEFAULT_SERVER = "LATAM"
+"""Servidor (região) consultado no Divine Pride.
 
-O cliente LATAM compartilha a base de dados publicada como `bRO` no Divine
-Pride (nomes e descrições em português). Trocável via `RAGDATA_DP_SERVER`.
+O Divine Pride publica a base do Ragnarok LATAM sob o alias `LATAM`, com textos
+em português, espanhol e inglês. Trocável via `RAGDATA_DP_SERVER`, mas a busca
+por necessidade (`ragdata find`) é sempre feita na base LATAM.
 """
+
+DEFAULT_LANGUAGE = "pt"
+"""Idioma dos textos (nome, descrição) pedidos ao Divine Pride (`Accept-Language`)."""
+
+#: Aliases de servidor aceitos pela API (header `x-server`), conforme a documentação.
+DIVINE_PRIDE_SERVERS: tuple[str, ...] = (
+    "bRO", "cRO", "dpRO", "idRO", "GGH", "GZero", "iRO", "jRO", "kROM", "kROZ",
+    "LATAM", "ropEU", "ropRU", "thROC", "thROG", "twRO", "twROZ",
+)
+
+#: Idiomas aceitos pela API (`Accept-Language`).
+DIVINE_PRIDE_LANGUAGES: tuple[str, ...] = ("en", "ko", "ja", "pt", "ru", "fr", "de", "es", "th", "cn")
 
 DIVINE_PRIDE_BASE_URL = "https://www.divine-pride.net"
 BROWIKI_API_URL = "https://browiki.org/api.php"
@@ -47,6 +60,7 @@ class Settings:
 
     divine_pride_api_key: str | None = None
     divine_pride_server: str = DEFAULT_SERVER
+    divine_pride_language: str = DEFAULT_LANGUAGE
     cache_dir: Path = None  # type: ignore[assignment]
     # A API do Divine Pride pede no máximo 1 requisição por segundo.
     divine_pride_rate_limit: float = 1.0
@@ -72,7 +86,8 @@ class Settings:
         ttl = os.environ.get("RAGDATA_CACHE_TTL")
         return cls(
             divine_pride_api_key=os.environ.get("DIVINE_PRIDE_API_KEY") or None,
-            divine_pride_server=os.environ.get("RAGDATA_DP_SERVER", DEFAULT_SERVER),
+            divine_pride_server=os.environ.get("RAGDATA_DP_SERVER") or DEFAULT_SERVER,
+            divine_pride_language=os.environ.get("RAGDATA_DP_LANGUAGE") or DEFAULT_LANGUAGE,
             cache_dir=_default_cache_dir(),
             cache_ttl_seconds=int(ttl) if ttl else 30 * 24 * 3600,
         )

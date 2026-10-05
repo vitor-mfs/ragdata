@@ -7,6 +7,7 @@ from .errors import (
     RagdataError,
     SourceError,
     UnknownJob,
+    WrongRegion,
 )
 from .models import (
     Bonuses,
@@ -40,5 +41,6 @@ __all__ = [
     "TargetMonster",
     "UnknownJob",
     "WeaponType",
+    "WrongRegion",
     "__version__",
 ]
